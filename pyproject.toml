@@ -10,15 +10,21 @@ packages = [
 
 [tool.poetry.dependencies]
 python = ">=3.9.0, <3.12"
-torch = ">=2.0.0"
+torch = "^2.1.0"
+accelerate = "^0.26.1"
+bitsandbytes = "^0.42.0"
+datasets = "^2.16.1"
+peft = "^0.8.1"
+transformers = "^4.37.2"
+einops = "^0.7.0"
 jupyterlab = "*"
 ipykernel = "*"
 structlog = "*"
 tqdm = "*"
-datasets = "*"
 huggingface-hub = "*"
 wandb = "*"
 simple-parsing = "*"
+mistralai = "*"
 
 [tool.poetry.dev-dependencies]
 pytest = "*"

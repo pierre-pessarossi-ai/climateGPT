@@ -24,6 +24,8 @@ MISTRAL_MODELS = [
     "open-mixtral-8x7b",
 ]
 
+OPENAI_MODELS = ["gpt-3.5-turbo-0125"]
+
 
 @dataclass
 class PrepareDataConfig:
@@ -50,6 +52,10 @@ def call_mistral(prompt, model: str = "mistral-large-latest") -> str:
         messages=messages,
     )
     return chat_response.choices[0].message.content
+
+
+def call_openai(prompt, model: str = "gpt-3.5-turbo-0125") -> str:
+    ...
 
 
 class PrepareSFTDataset:
@@ -114,7 +120,8 @@ class PrepareSFTDataset:
                 self.local_cache / f"""{encoded_title}.json""",
                 "w",
             ) as f:
-                f.write(answer_i)
+                for line in answer_i:
+                    f.write(line)
             log.info("Entry cached")
 
     def __call__(self, max_range: int) -> None:

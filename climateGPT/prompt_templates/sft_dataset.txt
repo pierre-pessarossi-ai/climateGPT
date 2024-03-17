@@ -1,16 +1,8 @@
 My goal is to build a dataset of instruction for fine-tuning a base large language model (LLM).
 You will be provided below the text from a wikipedia article.
 Your mission is to propose {number_of_questions} questions and generate the relevant answers solely based on the wikipedia text. The overall tone of questions and answers should be a little less formal and technical than the tone of voice of wikipedia articles.
-The instruction/anwser need to have the following format:
-<|im_start|>system
-You are an expert about climate change and ecology.
-<|im_end|>
-<|im_start|>user
-Insert here your proposed question<|im_end|>
-<|im_start|>assistant
-Insert here the response<|im_end|>
 
-Since there are several question, output a valid json format where the key is the question number and the value is the instruction/answer in the expected format.
+Output a NDJSON where the keys are instruction and answer.
 
 Here is the wikipedia article title and content:
 Title: {title}

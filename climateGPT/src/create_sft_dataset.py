@@ -182,8 +182,12 @@ class PushDatasetToHuggingFaceHub:
     def convert_to_hf_dataset(self) -> None:
         self.huggingface_dataset = datasets.DatasetDict(
             {
-                "train": datasets.Dataset.from_pandas(self.df.loc[self.train_index]),
-                "test": datasets.Dataset.from_pandas(self.df.loc[self.test_index]),
+                "train": datasets.Dataset.from_pandas(
+                    self.df.loc[self.train_index], preserve_index=False
+                ),
+                "test": datasets.Dataset.from_pandas(
+                    self.df.loc[self.test_index], preserve_index=False
+                ),
             }
         )
         log.info("Dataset converted to HuggingFace dataset dict.")

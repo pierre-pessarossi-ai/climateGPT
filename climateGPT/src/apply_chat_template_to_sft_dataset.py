@@ -1,11 +1,16 @@
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Dict
 
-import datasets
 import structlog
 from simple_parsing import ArgumentParser
-from transformers import AutoTokenizer, PreTrainedTokenizer
+from transformers import AutoTokenizer
+
+from climateGPT.src.repositories import (
+    ClimateSFTDatasetRepository,
+    HubClimateSFTDatasetRepository,
+    LocalTemplatedSFTDatasetRepository,
+    TemplatedClimateSFTDatasetRepository,
+)
 
 log = structlog.get_logger()
 
@@ -19,8 +24,6 @@ You are an expert on climate change and ecology.{eos_token}
 {answer}{eos_token}
 """
 
-PATH_TO_SAVE = Path("climateGPT/data/templated_sft_dataset")
-
 
 @dataclass
 class TokenizerConfig:
@@ -30,45 +33,78 @@ class TokenizerConfig:
 
 @dataclass
 class DatasetConfig:
-    dataset_name: str = "pierre-pessarossi/climate-question-answers"
-
-
-def load_tokenizer(model_name: str, model_max_length: int) -> PreTrainedTokenizer:
-    tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
-    if tokenizer.pad_token_id is None:
-        tokenizer.pad_token_id = tokenizer.eos_token_id
-
-    if tokenizer.model_max_length > model_max_length:
-        tokenizer.model_max_length = model_max_length
-
-    return tokenizer
-
-
-def load_sft_dataset(dataset_name: str) -> datasets.DatasetDict:
-    return datasets.load_dataset(dataset_name)
-
-
-def apply_chat_template_to_example(
-    example: Dict[str, str], eos_token: str, template: str
-) -> Dict[str, str]:
-    example["eos_token"] = eos_token
-    example["text"] = template.format(**example)
-    return example
-
-
-def apply_chat_template(
-    raw_dataset: datasets.DatasetDict, tokenizer: PreTrainedTokenizer
-):
-    column_names = list(raw_dataset["train"].features)
-    return raw_dataset.map(
-        apply_chat_template_to_example,
-        fn_kwargs={"template": CHAT_TEMPLATE, "eos_token": tokenizer.eos_token},
-        remove_columns=column_names,
+    climate_sft_dataset_repository: ClimateSFTDatasetRepository = (
+        HubClimateSFTDatasetRepository
+    )
+    templated_climate_sft_dataset_repository: TemplatedClimateSFTDatasetRepository = (
+        LocalTemplatedSFTDatasetRepository
     )
 
 
-def save_templated_dataset_locally(template_dataset: datasets.DatasetDict) -> None:
-    template_dataset.save_to_disk(PATH_TO_SAVE)
+class ApplyChatTemplate:
+    def __init__(
+        self,
+        climate_sft_dataset_repository: ClimateSFTDatasetRepository,
+        templated_climate_sft_dataset_repository: TemplatedClimateSFTDatasetRepository,
+        model_name: str,
+        model_max_length: int = 2048,
+    ) -> None:
+        self.climate_sft_dataset_repository = climate_sft_dataset_repository
+        self.templated_climate_sft_dataset_repository = (
+            templated_climate_sft_dataset_repository
+        )
+        self.model_name = model_name
+        self.model_max_length = model_max_length
+
+    def load_tokenizer(self) -> None:
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            self.model_name, trust_remote_code=True
+        )
+        if self.tokenizer.pad_token_id is None:
+            self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
+
+        if self.tokenizer.model_max_length > self.model_max_length:
+            self.tokenizer.model_max_length = self.model_max_length
+
+        log.info(
+            "Tokenizer loaded",
+            model_name=args.token_config.model_name,
+            max_length=args.token_config.model_max_length,
+        )
+
+    def load_sft_dataset(self) -> None:
+        self.sft_dataset = self.climate_sft_dataset_repository().load()
+        log.info("Dataset loaded", dataset=self.sft_dataset)
+
+    @staticmethod
+    def apply_chat_template_to_example(
+        example: Dict[str, str], eos_token: str, template: str
+    ) -> Dict[str, str]:
+        example["eos_token"] = eos_token
+        example["text"] = template.format(**example)
+        return example
+
+    def apply_chat_template(self) -> None:
+        column_names = list(self.sft_dataset["train"].features)
+        self.templated_sft_dataset = self.sft_dataset.map(
+            ApplyChatTemplate.apply_chat_template_to_example,
+            fn_kwargs={
+                "template": CHAT_TEMPLATE,
+                "eos_token": self.tokenizer.eos_token,
+            },
+            remove_columns=column_names,
+        )
+        log.info("Chat template applied to raw dataset")
+
+    def save_templated_dataset(self) -> None:
+        self.templated_climate_sft_dataset_repository().save(self.templated_sft_dataset)
+        log.info("Templated dataset saved")
+
+    def apply_chat_template_and_save_templated_dataset(self):
+        self.load_tokenizer()
+        self.load_sft_dataset()
+        self.apply_chat_template()
+        self.save_templated_dataset()
 
 
 if __name__ == "__main__":
@@ -80,20 +116,11 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    tokenizer = load_tokenizer(
-        args.token_config.model_name, args.token_config.model_max_length
-    )
-    log.info(
-        "Tokenizer loaded",
-        model_name=args.token_config.model_name,
-        max_length=args.token_config.model_max_length,
+    apply_chat_template = ApplyChatTemplate(
+        args.data_config.climate_sft_dataset_repository,
+        args.data_config.templated_climate_sft_dataset_repository,
+        args.token_config.model_name,
+        args.token_config.model_max_length,
     )
 
-    dataset = load_sft_dataset(args.data_config.dataset_name)
-    log.info("Dataset loaded", dataset=dataset)
-
-    dataset_w_template = apply_chat_template(dataset, tokenizer)
-    log.info("Chat template applied to raw dataset")
-
-    save_templated_dataset_locally(dataset_w_template)
-    log.info("Templated dataset saved locally")
+    apply_chat_template.apply_chat_template_and_save_templated_dataset()

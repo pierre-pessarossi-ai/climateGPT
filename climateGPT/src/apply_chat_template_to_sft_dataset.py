@@ -33,10 +33,8 @@ class TokenizerConfig:
 
 @dataclass
 class DatasetConfig:
-    climate_sft_dataset_repository: ClimateSFTDatasetRepository = (
-        HubClimateSFTDatasetRepository
-    )
-    templated_climate_sft_dataset_repository: TemplatedClimateSFTDatasetRepository = (
+    sft_dataset_repository: ClimateSFTDatasetRepository = HubClimateSFTDatasetRepository
+    templated_sft_dataset_repository: TemplatedClimateSFTDatasetRepository = (
         LocalTemplatedSFTDatasetRepository
     )
 
@@ -44,15 +42,13 @@ class DatasetConfig:
 class ApplyChatTemplate:
     def __init__(
         self,
-        climate_sft_dataset_repository: ClimateSFTDatasetRepository,
-        templated_climate_sft_dataset_repository: TemplatedClimateSFTDatasetRepository,
         model_name: str,
         model_max_length: int = 2048,
+        sft_dataset_repository: ClimateSFTDatasetRepository = HubClimateSFTDatasetRepository(),  # noqa
+        templated_sft_dataset_repository: TemplatedClimateSFTDatasetRepository = LocalTemplatedSFTDatasetRepository(),  # noqa
     ) -> None:
-        self.climate_sft_dataset_repository = climate_sft_dataset_repository
-        self.templated_climate_sft_dataset_repository = (
-            templated_climate_sft_dataset_repository
-        )
+        self.sft_dataset_repository = sft_dataset_repository
+        self.templated_sft_dataset_repository = templated_sft_dataset_repository
         self.model_name = model_name
         self.model_max_length = model_max_length
 
@@ -68,12 +64,12 @@ class ApplyChatTemplate:
 
         log.info(
             "Tokenizer loaded",
-            model_name=args.token_config.model_name,
-            max_length=args.token_config.model_max_length,
+            model_name=self.model_name,
+            max_length=self.model_max_length,
         )
 
     def load_sft_dataset(self) -> None:
-        self.sft_dataset = self.climate_sft_dataset_repository().load()
+        self.sft_dataset = self.sft_dataset_repository.load()
         log.info("Dataset loaded", dataset=self.sft_dataset)
 
     @staticmethod
@@ -97,14 +93,22 @@ class ApplyChatTemplate:
         log.info("Chat template applied to raw dataset")
 
     def save_templated_dataset(self) -> None:
-        self.templated_climate_sft_dataset_repository().save(self.templated_sft_dataset)
+        self.templated_sft_dataset_repository.save(self.templated_sft_dataset)
         log.info("Templated dataset saved")
+
+    def load_templated_dataset(self) -> None:
+        self.templated_sft_dataset = self.templated_sft_dataset_repository.load()
+        log.info("Loaded templated dataset", dataset=self.templated_sft_dataset)
 
     def apply_chat_template_and_save_templated_dataset(self):
         self.load_tokenizer()
         self.load_sft_dataset()
         self.apply_chat_template()
         self.save_templated_dataset()
+
+    def load_already_existing_templated_dataset(self):
+        self.load_tokenizer()
+        self.load_templated_dataset()
 
 
 if __name__ == "__main__":
@@ -117,8 +121,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     apply_chat_template = ApplyChatTemplate(
-        args.data_config.climate_sft_dataset_repository,
-        args.data_config.templated_climate_sft_dataset_repository,
+        args.data_config.sft_dataset_repository,
+        args.data_config.templated_sft_dataset_repository,
         args.token_config.model_name,
         args.token_config.model_max_length,
     )
